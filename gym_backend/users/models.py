@@ -144,3 +144,162 @@ class UserProfile(models.Model):
             12: 2199,
         }
         return payment_map.get(self.target_months, 0)
+    
+    def get_remaining_days(self):
+        """Calculate remaining days from plan start date"""
+        from datetime import timedelta
+        from django.utils import timezone
+        if self.payment_status and self.updated_at:
+            plan_start = self.updated_at
+            plan_end = plan_start + timedelta(days=self.target_months * 30)
+            remaining = (plan_end - timezone.now()).days
+            return max(0, remaining)
+        return self.target_months * 30
+
+
+class Attendance(models.Model):
+    """
+    Attendance model to track user attendance requests and trainer approvals
+    """
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('accepted', 'Accepted'),
+        ('rejected', 'Rejected'),
+    ]
+    
+    user = models.ForeignKey(UserLogin, on_delete=models.CASCADE, related_name='attendances', verbose_name="User")
+    trainer = models.ForeignKey(Trainer, on_delete=models.CASCADE, related_name='user_attendances', verbose_name="Trainer")
+    date = models.DateField(verbose_name="Attendance Date")
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending', verbose_name="Status")
+    request_date = models.DateTimeField(auto_now_add=True, verbose_name="Request Date")
+    accepted_date = models.DateTimeField(blank=True, null=True, verbose_name="Accepted Date")
+    
+    class Meta:
+        db_table = 'attendance'
+        verbose_name = 'Attendance'
+        verbose_name_plural = 'Attendances'
+        ordering = ['-date']
+        unique_together = ['user', 'date']
+    
+    def __str__(self):
+        return f"{self.user.name} - {self.date} ({self.status})"
+
+
+class Review(models.Model):
+    """
+    Review model for users to rate and review their trainers
+    """
+    user = models.ForeignKey(UserLogin, on_delete=models.CASCADE, related_name='reviews', verbose_name="User")
+    trainer = models.ForeignKey(Trainer, on_delete=models.CASCADE, related_name='trainer_reviews', verbose_name="Trainer")
+    rating = models.IntegerField(choices=[(1, '1 Star'), (2, '2 Stars'), (3, '3 Stars'), (4, '4 Stars'), (5, '5 Stars')], verbose_name="Rating")
+    review_text = models.TextField(verbose_name="Review")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Created At")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Updated At")
+    
+    class Meta:
+        db_table = 'review'
+        verbose_name = 'Review'
+        verbose_name_plural = 'Reviews'
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.user.name} - {self.trainer.user.name} ({self.rating} stars)"
+
+
+class FoodItem(models.Model):
+    """
+    Food items with nutritional information
+    """
+    FOOD_CATEGORIES = [
+        ('dairy', 'Dairy'),
+        ('seafood', 'Seafood'),
+        ('nuts', 'Nuts'),
+        ('eggs', 'Eggs'),
+        ('grains', 'Grains'),
+        ('vegetables', 'Vegetables'),
+        ('fruits', 'Fruits'),
+        ('meat', 'Meat'),
+        ('legumes', 'Legumes'),
+        ('other', 'Other'),
+    ]
+    
+    DIET_TYPES = [
+        ('vegan', 'Vegan'),           # No animal products at all
+        ('vegetarian', 'Vegetarian'), # No meat/seafood, but eggs/dairy OK
+        ('non_veg', 'Non-Vegetarian'), # All foods
+    ]
+    
+    name = models.CharField(max_length=100, verbose_name="Food Name")
+    food_category = models.CharField(max_length=20, choices=FOOD_CATEGORIES, verbose_name="Category")
+    diet_type = models.CharField(max_length=20, choices=DIET_TYPES, default='vegan', verbose_name="Diet Type")
+    calories = models.DecimalField(max_digits=6, decimal_places=2, verbose_name="Calories (per 100g)")
+    protein = models.DecimalField(max_digits=5, decimal_places=2, verbose_name="Protein (g)")
+    carbs = models.DecimalField(max_digits=5, decimal_places=2, verbose_name="Carbohydrates (g)")
+    fats = models.DecimalField(max_digits=5, decimal_places=2, verbose_name="Fats (g)")
+    serving_size = models.CharField(max_length=50, default="100g", verbose_name="Serving Size")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Created At")
+    
+    class Meta:
+        db_table = 'food_item'
+        verbose_name = 'Food Item'
+        verbose_name_plural = 'Food Items'
+        ordering = ['name']
+    
+    def __str__(self):
+        return f"{self.name} ({self.food_category})"
+
+
+class DietPlanTemplate(models.Model):
+    """
+    Pre-made diet plan templates for different goals and calorie ranges
+    """
+    GOAL_CHOICES = [
+        ('weight_loss', 'Weight Loss'),
+        ('weight_gain', 'Weight Gain'),
+        ('muscle_building', 'Muscle Building'),
+    ]
+    
+    name = models.CharField(max_length=100, verbose_name="Template Name")
+    goal_type = models.CharField(max_length=20, choices=GOAL_CHOICES, verbose_name="Goal Type")
+    calorie_min = models.IntegerField(verbose_name="Minimum Calories")
+    calorie_max = models.IntegerField(verbose_name="Maximum Calories")
+    description = models.TextField(blank=True, verbose_name="Description")
+    meals_data = models.JSONField(verbose_name="Meals Data")  # {"breakfast": [...], "lunch": [...], "dinner": [...], "snacks": [...]}
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Created At")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Updated At")
+    
+    class Meta:
+        db_table = 'diet_plan_template'
+        verbose_name = 'Diet Plan Template'
+        verbose_name_plural = 'Diet Plan Templates'
+        ordering = ['goal_type', 'calorie_min']
+    
+    def __str__(self):
+        return f"{self.name} ({self.calorie_min}-{self.calorie_max} cal)"
+
+
+class UserDietPlan(models.Model):
+    """
+    Personalized diet plan assigned by trainer to user
+    """
+    user = models.ForeignKey(UserLogin, on_delete=models.CASCADE, related_name='diet_plans', verbose_name="User")
+    trainer = models.ForeignKey(Trainer, on_delete=models.CASCADE, related_name='created_diet_plans', verbose_name="Trainer")
+    template = models.ForeignKey(DietPlanTemplate, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Template Used")
+    plan_name = models.CharField(max_length=100, verbose_name="Plan Name")
+    target_calories = models.IntegerField(verbose_name="Target Daily Calories")
+    meals_data = models.JSONField(verbose_name="Customized Meals")  # Trainer can modify template
+    notes = models.TextField(blank=True, verbose_name="Trainer Notes")
+    start_date = models.DateField(verbose_name="Start Date")
+    end_date = models.DateField(null=True, blank=True, verbose_name="End Date")
+    is_active = models.BooleanField(default=True, verbose_name="Is Active")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Created At")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Updated At")
+    
+    class Meta:
+        db_table = 'user_diet_plan'
+        verbose_name = 'User Diet Plan'
+        verbose_name_plural = 'User Diet Plans'
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.user.name} - {self.plan_name}"

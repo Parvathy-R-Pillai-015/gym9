@@ -27,12 +27,35 @@ urlpatterns = [
     path('api/profile/<int:user_id>/', views.get_profile, name='get_profile'),
     path('api/payment/update/', views.update_payment_status, name='update_payment_status'),
     
+    # Trainer APIs
+    path('api/trainer/<int:trainer_id>/users/', views.get_trainer_users, name='get_trainer_users'),
+    path('api/trainer/<int:trainer_id>/attendance/pending/', views.get_pending_attendance_requests, name='get_pending_attendance_requests'),
+    
+    # Attendance APIs
+    path('api/attendance/request/', views.request_attendance, name='request_attendance'),
+    path('api/attendance/accept/', views.accept_attendance, name='accept_attendance'),
+    path('api/attendance/user/<int:user_id>/', views.get_user_attendance, name='get_user_attendance'),
+    
+    # Review APIs
+    path('api/review/create/', views.create_review, name='create_review'),
+    path('api/reviews/trainer/<int:trainer_id>/', views.get_trainer_reviews, name='get_trainer_reviews'),
+    path('api/reviews/all/', views.get_all_reviews, name='get_all_reviews'),
+    
+    # Diet Plan APIs
+    path('api/diet/foods/', views.get_food_items, name='get_food_items'),
+    path('api/diet/templates/', views.get_diet_templates, name='get_diet_templates'),
+    path('api/diet/calculate/<int:user_id>/', views.calculate_target_calories, name='calculate_target_calories'),
+    path('api/diet/plan/create/', views.create_user_diet_plan, name='create_user_diet_plan'),
+    path('api/diet/plan/user/<int:user_id>/', views.get_user_diet_plan, name='get_user_diet_plan'),
+    path('api/diet/plans/trainer/<int:trainer_id>/', views.get_trainer_diet_plans, name='get_trainer_diet_plans'),
+    
     # Admin APIs
     path('api/admin/users/all/', admin_views.get_all_users, name='get_all_users'),
     path('api/admin/users/paid/', admin_views.get_paid_users, name='get_paid_users'),
     path('api/admin/users/unpaid/', admin_views.get_unpaid_users, name='get_unpaid_users'),
     
     # Trainer management - specific paths before generic patterns
+    path('api/admin/trainers/create/', admin_views.create_trainer, name='admin_create_trainer'),
     path('api/admin/trainers/assign/', admin_views.assign_trainer_to_goal, name='assign_trainer_to_goal'),
     path('api/admin/trainers/remove/', admin_views.remove_trainer_from_goal, name='remove_trainer_from_goal'),
     path('api/admin/trainers/', admin_views.get_all_trainers, name='get_all_trainers'),

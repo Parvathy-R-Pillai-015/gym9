@@ -7,6 +7,7 @@ import 'screens/admin_dashboard_new.dart';
 import 'screens/add_trainer_screen.dart';
 import 'screens/user_profile_screen.dart';
 import 'screens/payment_screen.dart';
+import 'screens/trainer_dashboard.dart';
 
 class AppRoutes {
   static const String landing = '/';
@@ -17,6 +18,7 @@ class AppRoutes {
   static const String addTrainer = '/add-trainer';
   static const String userProfile = '/user-profile';
   static const String payment = '/payment';
+  static const String trainerDashboard = '/trainer-dashboard';
 
   static Map<String, WidgetBuilder> getRoutes() {
     return {
@@ -54,6 +56,14 @@ class AppRoutes {
             amount: args['amount'],
             months: args['months'],
             userName: args['userName'],
+          ),
+        );
+      case trainerDashboard:
+        final args = settings.arguments as Map<String, dynamic>;
+        return MaterialPageRoute(
+          builder: (context) => TrainerDashboard(
+            trainerId: args['trainerId'],
+            trainerName: args['trainerName'],
           ),
         );
       default:

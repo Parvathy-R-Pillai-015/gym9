@@ -138,6 +138,281 @@ class _TrainerManagementTabState extends State<TrainerManagementTab> {
     }
   }
 
+  void _showAddTrainerDialog() {
+    final nameController = TextEditingController();
+    final emailController = TextEditingController();
+    final mobileController = TextEditingController();
+    final experienceController = TextEditingController();
+    String? selectedGender;
+    String? selectedSpecialization;
+    String? selectedCertification;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Add New Trainer'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Name *',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: emailController,
+                      decoration: const InputDecoration(
+                        labelText: 'Email *',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: mobileController,
+                      decoration: const InputDecoration(
+                        labelText: 'Mobile (10 digits) *',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.phone,
+                      maxLength: 10,
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: selectedGender,
+                      decoration: const InputDecoration(
+                        labelText: 'Gender *',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'male', child: Text('Male')),
+                        DropdownMenuItem(value: 'female', child: Text('Female')),
+                      ],
+                      onChanged: (value) {
+                        setState(() {
+                          selectedGender = value;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: experienceController,
+                      decoration: const InputDecoration(
+                        labelText: 'Experience (years) *',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: selectedSpecialization,
+                      decoration: const InputDecoration(
+                        labelText: 'Specialization *',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'Weight Loss', child: Text('Weight Loss')),
+                        DropdownMenuItem(value: 'Weight Gain', child: Text('Weight Gain')),
+                        DropdownMenuItem(value: 'Muscle Gain', child: Text('Muscle Gain')),
+                        DropdownMenuItem(value: 'Cardio Training', child: Text('Cardio Training')),
+                        DropdownMenuItem(value: 'Strength Training', child: Text('Strength Training')),
+                        DropdownMenuItem(value: 'Yoga', child: Text('Yoga')),
+                        DropdownMenuItem(value: 'CrossFit', child: Text('CrossFit')),
+                        DropdownMenuItem(value: 'Sports Nutrition', child: Text('Sports Nutrition')),
+                        DropdownMenuItem(value: 'Rehabilitation', child: Text('Rehabilitation')),
+                      ],
+                      onChanged: (value) {
+                        setState(() {
+                          selectedSpecialization = value;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: selectedCertification,
+                      decoration: const InputDecoration(
+                        labelText: 'Certification (optional)',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'NASM Certified Personal Trainer', child: Text('NASM Certified Personal Trainer')),
+                        DropdownMenuItem(value: 'ACE Personal Trainer', child: Text('ACE Personal Trainer')),
+                        DropdownMenuItem(value: 'ISSA Certified Fitness Trainer', child: Text('ISSA Certified Fitness Trainer')),
+                        DropdownMenuItem(value: 'ACSM Certified Personal Trainer', child: Text('ACSM Certified Personal Trainer')),
+                        DropdownMenuItem(value: 'CrossFit Level 1 Trainer', child: Text('CrossFit Level 1 Trainer')),
+                        DropdownMenuItem(value: 'Yoga Alliance Certified', child: Text('Yoga Alliance Certified')),
+                        DropdownMenuItem(value: 'Precision Nutrition Certified', child: Text('Precision Nutrition Certified')),
+                        DropdownMenuItem(value: 'Other', child: Text('Other')),
+                      ],
+                      onChanged: (value) {
+                        setState(() {
+                          selectedCertification = value;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Password will be auto-generated as: trainername+tr',
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (nameController.text.isEmpty ||
+                        emailController.text.isEmpty ||
+                        mobileController.text.isEmpty ||
+                        selectedGender == null ||
+                        experienceController.text.isEmpty ||
+                        selectedSpecialization == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Please fill all required fields'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
+
+                    Navigator.pop(context);
+                    await _createTrainer(
+                      nameController.text,
+                      emailController.text,
+                      mobileController.text,
+                      selectedGender!,
+                      int.parse(experienceController.text),
+                      selectedSpecialization!,
+                      selectedCertification ?? '',
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF7B4EFF),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Create Trainer'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _createTrainer(
+    String name,
+    String email,
+    String mobile,
+    String gender,
+    int experience,
+    String specialization,
+    String certification,
+  ) async {
+    try {
+      final response = await http.post(
+        Uri.parse('http://127.0.0.1:8000/api/admin/trainers/create/'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'name': name,
+          'emailid': email,
+          'mobile': mobile,
+          'gender': gender,
+          'experience': experience,
+          'specialization': specialization,
+          'certification': certification,
+        }),
+      );
+
+      final data = json.decode(response.body);
+
+      if (mounted) {
+        if (data['success']) {
+          // Show success dialog with password
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Trainer Created Successfully!'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Name: ${data['trainer']['name']}'),
+                  Text('Email: ${data['trainer']['email']}'),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.purple[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.purple),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Login Credentials:',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        Text('Password: ${data['trainer']['password']}'),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Please share these credentials with the trainer',
+                          style: TextStyle(fontSize: 12, color: Colors.red),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _loadAllTrainers();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF7B4EFF),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(data['message']),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   void _showAssignDialog(int trainerId, String trainerName, String? currentGoal) {
     showDialog(
       context: context,
@@ -196,6 +471,22 @@ class _TrainerManagementTabState extends State<TrainerManagementTab> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // Add Trainer Button
+        Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: ElevatedButton.icon(
+            onPressed: _showAddTrainerDialog,
+            icon: const Icon(Icons.person_add, color: Colors.white),
+            label: const Text('Add New Trainer', style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF7B4EFF),
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ),
         // Summary Card
         Card(
           color: Colors.blue[50],

@@ -6,11 +6,8 @@ class HomeScreen extends StatefulWidget {
   final int userId;
   final String userName;
 
-  const HomeScreen({
-    Key? key,
-    required this.userId,
-    required this.userName,
-  }) : super(key: key);
+  const HomeScreen({Key? key, required this.userId, required this.userName})
+    : super(key: key);
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -20,11 +17,19 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = true;
   Map<String, dynamic>? _userProfile;
   String? _error;
+  List<Map<String, dynamic>> _attendanceHistory = [];
+  int _totalAttendance = 0;
+  int _pendingAttendance = 0;
+  bool _canRequestToday = true;
+  Map<String, dynamic>? _dietPlan;
+  bool _hasDietPlan = false;
 
   @override
   void initState() {
     super.initState();
     _loadUserProfile();
+    _loadAttendance();
+    _loadDietPlan();
   }
 
   Future<void> _loadUserProfile() async {
@@ -58,6 +63,382 @@ class _HomeScreenState extends State<HomeScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  Future<void> _loadAttendance() async {
+    try {
+      final response = await http.get(
+        Uri.parse(
+          'http://127.0.0.1:8000/api/attendance/user/${widget.userId}/',
+        ),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          setState(() {
+            _attendanceHistory = List<Map<String, dynamic>>.from(
+              data['attendances'],
+            );
+            _totalAttendance = data['total_accepted'];
+            _pendingAttendance = data['total_pending'];
+
+            // Check if already requested today
+            final today = DateTime.now().toIso8601String().split('T')[0];
+            _canRequestToday = !_attendanceHistory.any(
+              (att) => att['date'] == today,
+            );
+          });
+        }
+      }
+    } catch (e) {
+      print('Error loading attendance: $e');
+    }
+  }
+
+  Future<void> _loadDietPlan() async {
+    try {
+      final response = await http.get(
+        Uri.parse('http://127.0.0.1:8000/api/diet/plan/user/${widget.userId}/'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true && data['has_plan'] == true) {
+          setState(() {
+            _dietPlan = data['diet_plan'];
+            _hasDietPlan = true;
+          });
+        }
+      }
+    } catch (e) {
+      print('Error loading diet plan: $e');
+    }
+  }
+
+  Future<void> _requestAttendance() async {
+    try {
+      final response = await http.post(
+        Uri.parse('http://127.0.0.1:8000/api/attendance/request/'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'user_id': widget.userId}),
+      );
+
+      final data = json.decode(response.body);
+
+      if (response.statusCode == 201 && data['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(data['message']),
+            backgroundColor: Colors.green,
+          ),
+        );
+        _loadAttendance();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(data['message'] ?? 'Failed to request attendance'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  void _showAttendanceHistory() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('My Attendance History'),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 400,
+          child: Column(
+            children: [
+              Card(
+                color: const Color(0xFF7B4EFF).withOpacity(0.1),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      Column(
+                        children: [
+                          Text(
+                            '$_totalAttendance',
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF7B4EFF),
+                            ),
+                          ),
+                          const Text('Accepted'),
+                        ],
+                      ),
+                      Column(
+                        children: [
+                          Text(
+                            '$_pendingAttendance',
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.orange,
+                            ),
+                          ),
+                          const Text('Pending'),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: _attendanceHistory.isEmpty
+                    ? const Center(child: Text('No attendance records yet'))
+                    : ListView.builder(
+                        itemCount: _attendanceHistory.length,
+                        itemBuilder: (context, index) {
+                          final att = _attendanceHistory[index];
+                          return ListTile(
+                            leading: Icon(
+                              att['status'] == 'accepted'
+                                  ? Icons.check_circle
+                                  : att['status'] == 'pending'
+                                  ? Icons.pending
+                                  : Icons.cancel,
+                              color: att['status'] == 'accepted'
+                                  ? Colors.green
+                                  : att['status'] == 'pending'
+                                  ? Colors.orange
+                                  : Colors.red,
+                            ),
+                            title: Text(att['date']),
+                            subtitle: Text('Status: ${att['status']}'),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showReviewDialog() {
+    int selectedRating = 0;
+    final TextEditingController reviewController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Rate Your Trainer'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Select Rating (1-5 Stars)',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(5, (index) {
+                    return IconButton(
+                      icon: Icon(
+                        index < selectedRating ? Icons.star : Icons.star_border,
+                        color: Colors.amber,
+                        size: 40,
+                      ),
+                      onPressed: () {
+                        setDialogState(() {
+                          selectedRating = index + 1;
+                        });
+                      },
+                    );
+                  }),
+                ),
+                if (selectedRating > 0)
+                  Center(
+                    child: Text(
+                      '$selectedRating Star${selectedRating > 1 ? 's' : ''}',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.amber,
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Write Your Review',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: reviewController,
+                  maxLines: 5,
+                  decoration: InputDecoration(
+                    hintText: 'Share your experience with the trainer...',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Note: You can post one review per month',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: selectedRating > 0
+                  ? () async {
+                      if (reviewController.text.trim().isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Please write a review'),
+                            backgroundColor: Colors.orange,
+                          ),
+                        );
+                        return;
+                      }
+
+                      try {
+                        final response = await http.post(
+                          Uri.parse('http://127.0.0.1:8000/api/review/create/'),
+                          headers: {'Content-Type': 'application/json'},
+                          body: json.encode({
+                            'user_id': widget.userId,
+                            'rating': selectedRating,
+                            'review_text': reviewController.text.trim(),
+                          }),
+                        );
+
+                        final data = json.decode(response.body);
+
+                        Navigator.pop(context);
+
+                        if (response.statusCode == 201 && data['success'] == true) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(data['message']),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(data['message'] ?? 'Failed to post review'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+                        );
+                      }
+                    }
+                  : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFF6B9D),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Submit Review'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showDietPlanDetails() {
+    showDialog(
+      context: context,
+      builder: (context) => _DietPlanDetailsDialog(dietPlan: _dietPlan!),
+    );
+  }
+
+  Widget _buildMealSection(String mealName, List<dynamic> items) {
+    int totalCal = 0;
+    for (var item in items) {
+      totalCal += (item['calories'] as num).toInt();
+    }
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  mealName,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: Color(0xFF4CAF50),
+                  ),
+                ),
+                Text(
+                  '$totalCal cal',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ...items.map((item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.circle, size: 6, color: Colors.green),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '${item['food']} - ${item['quantity']}',
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                      ),
+                      Text(
+                        '${item['calories']} cal',
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                )),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -94,83 +475,84 @@ class _HomeScreenState extends State<HomeScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(child: Text(_error!))
-              : Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              const Color(0xFF7B4EFF).withOpacity(0.1),
-              Colors.white,
-            ],
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Welcome, ${widget.userName}!',
-                style: const TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+          ? Center(child: Text(_error!))
+          : Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    const Color(0xFF7B4EFF).withOpacity(0.1),
+                    Colors.white,
+                  ],
                 ),
               ),
-              const SizedBox(height: 10),
-              Text(
-                'Your fitness journey starts here',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[600],
-                ),
-              ),
-              const SizedBox(height: 20),
-              _buildProfileCard(),
-              const SizedBox(height: 30),
-              const Text(
-                'Workout Categories',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 20),
-              Expanded(
-                child: GridView.count(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 20,
-                  mainAxisSpacing: 20,
-                  children: [
-                    _buildWorkoutCard(
-                      'Cardio',
-                      Icons.directions_run,
-                      const Color(0xFFFF6B6B),
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                    Text(
+                      'Welcome, ${widget.userName}!',
+                      style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
                     ),
-                    _buildWorkoutCard(
-                      'Strength',
-                      Icons.fitness_center,
-                      const Color(0xFF7B4EFF),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Your fitness journey starts here',
+                      style: TextStyle(fontSize: 16, color: Colors.grey[600]),
                     ),
-                    _buildWorkoutCard(
-                      'Yoga',
-                      Icons.self_improvement,
-                      const Color(0xFF4ECDC4),
+                    const SizedBox(height: 20),
+                    _buildProfileCard(),
+                    const SizedBox(height: 30),
+                    const Text(
+                      'Workout Categories',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
                     ),
-                    _buildWorkoutCard(
-                      'Stretching',
-                      Icons.accessibility_new,
-                      const Color(0xFFFFBE0B),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      height: 400,
+                      child: GridView.count(
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 20,
+                        mainAxisSpacing: 20,
+                        physics: const NeverScrollableScrollPhysics(),
+                        children: [
+                          _buildWorkoutCard(
+                            'Cardio',
+                            Icons.directions_run,
+                            const Color(0xFFFF6B6B),
+                          ),
+                          _buildWorkoutCard(
+                            'Strength',
+                            Icons.fitness_center,
+                            const Color(0xFF7B4EFF),
+                          ),
+                          _buildWorkoutCard(
+                            'Yoga',
+                            Icons.self_improvement,
+                            const Color(0xFF4ECDC4),
+                          ),
+                          _buildWorkoutCard(
+                            'Stretching',
+                            Icons.accessibility_new,
+                            const Color(0xFFFFBE0B),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
               ),
-            ],
-          ),
-        ),
+            ),
       ),
     );
   }
@@ -223,10 +605,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     Text(
                       'Goal: ${_userProfile!['goal']?.toString().replaceAll('_', ' ').toUpperCase() ?? 'N/A'}',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[600],
-                      ),
+                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                     ),
                   ],
                 ),
@@ -249,14 +628,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     Text(
                       'Mobile Number',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                      ),
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      _userProfile!['mobile_number']?.toString() ?? 'Not Available',
+                      _userProfile!['mobile_number']?.toString() ??
+                          'Not Available',
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -332,14 +709,20 @@ class _HomeScreenState extends State<HomeScreen> {
               Expanded(
                 child: _buildInfoItem(
                   'Workout Time',
-                  _userProfile!['workout_time'] == 'morning' ? 'Morning' : 'Evening',
+                  _userProfile!['workout_time'] == 'morning'
+                      ? 'Morning'
+                      : 'Evening',
                   Icons.access_time,
                 ),
               ),
               Expanded(
                 child: _buildInfoItem(
                   'Diet',
-                  _userProfile!['diet_preference']?.toString().replaceAll('_', ' ').toUpperCase() ?? 'N/A',
+                  _userProfile!['diet_preference']
+                          ?.toString()
+                          .replaceAll('_', ' ')
+                          .toUpperCase() ??
+                      'N/A',
                   Icons.restaurant,
                 ),
               ),
@@ -364,7 +747,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.person_pin, color: Colors.purple[700], size: 24),
+                      Icon(
+                        Icons.person_pin,
+                        color: Colors.purple[700],
+                        size: 24,
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         'Your Assigned Trainer',
@@ -377,15 +764,260 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  _buildTrainerInfo('Name', _userProfile!['assigned_trainer']['name']),
-                  _buildTrainerInfo('Experience', '${_userProfile!['assigned_trainer']['experience']} years'),
-                  _buildTrainerInfo('Specialization', _userProfile!['assigned_trainer']['specialization']),
-                  _buildTrainerInfo('Certification', _userProfile!['assigned_trainer']['certification']),
-                  _buildTrainerInfo('Mobile', _userProfile!['assigned_trainer']['mobile']),
+                  _buildTrainerInfo(
+                    'Name',
+                    _userProfile!['assigned_trainer']['name'],
+                  ),
+                  _buildTrainerInfo(
+                    'Experience',
+                    '${_userProfile!['assigned_trainer']['experience']} years',
+                  ),
+                  _buildTrainerInfo(
+                    'Specialization',
+                    _userProfile!['assigned_trainer']['specialization'],
+                  ),
+                  _buildTrainerInfo(
+                    'Certification',
+                    _userProfile!['assigned_trainer']['certification'],
+                  ),
+                  _buildTrainerInfo(
+                    'Mobile',
+                    _userProfile!['assigned_trainer']['mobile'],
+                  ),
                 ],
               ),
             ),
           ],
+          // Attendance Section
+          const SizedBox(height: 20),
+          Card(
+            elevation: 4,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    const Color(0xFF7B4EFF).withOpacity(0.05),
+                    Colors.white,
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(15),
+              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.calendar_today, color: Color(0xFF7B4EFF)),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Attendance',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    Column(
+                      children: [
+                        Text(
+                          '$_totalAttendance',
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF7B4EFF),
+                          ),
+                        ),
+                        const Text('Accepted'),
+                      ],
+                    ),
+                    Column(
+                      children: [
+                        Text(
+                          '$_pendingAttendance',
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange,
+                          ),
+                        ),
+                        const Text('Pending'),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _canRequestToday ? _requestAttendance : null,
+                        icon: const Icon(Icons.add_task),
+                        label: Text(
+                          _canRequestToday
+                              ? 'Request Today'
+                              : 'Already Requested',
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF7B4EFF),
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: Colors.grey,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _showAttendanceHistory,
+                        icon: const Icon(Icons.history),
+                        label: const Text('View History'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF7B4EFF),
+                          side: const BorderSide(color: Color(0xFF7B4EFF)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          ),
+          const SizedBox(height: 20),
+          // Diet Plan Section
+          if (_hasDietPlan && _dietPlan != null)
+            Card(
+              elevation: 4,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF4CAF50), Color(0xFF8BC34A)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.restaurant_menu, color: Colors.white, size: 28),
+                        const SizedBox(width: 10),
+                        const Text(
+                          'My Diet Plan',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _dietPlan!['plan_name'],
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Target: ${_dietPlan!['target_calories']} cal/day',
+                            style: const TextStyle(color: Colors.white, fontSize: 14),
+                          ),
+                          Text(
+                            'By: ${_dietPlan!['trainer_name']}',
+                            style: const TextStyle(color: Colors.white70, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: () => _showDietPlanDetails(),
+                      icon: const Icon(Icons.visibility),
+                      label: const Text('View Full Diet Plan'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: const Color(0xFF4CAF50),
+                        minimumSize: const Size(double.infinity, 45),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          const SizedBox(height: 20),
+          // Review Section
+          Card(
+            elevation: 4,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFF6B9D), Color(0xFFFFA06B)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(15),
+              ),
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.star, color: Colors.white, size: 28),
+                      const SizedBox(width: 10),
+                      const Text(
+                        'Rate Your Trainer',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: () => _showReviewDialog(),
+                    icon: const Icon(Icons.rate_review),
+                    label: const Text('Post Review'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFFFF6B9D),
+                      minimumSize: const Size(double.infinity, 45),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -411,10 +1043,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(
-                fontSize: 13,
-                color: Colors.black87,
-              ),
+              style: const TextStyle(fontSize: 13, color: Colors.black87),
             ),
           ),
         ],
@@ -433,10 +1062,7 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               Text(
                 label,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                ),
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
               Text(
                 value,
@@ -475,11 +1101,7 @@ class _HomeScreenState extends State<HomeScreen> {
               color: color.withOpacity(0.2),
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              icon,
-              size: 40,
-              color: color,
-            ),
+            child: Icon(icon, size: 40, color: color),
           ),
           const SizedBox(height: 15),
           Text(
@@ -491,6 +1113,214 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// 7-Day Diet Plan Dialog
+class _DietPlanDetailsDialog extends StatefulWidget {
+  final Map<String, dynamic> dietPlan;
+
+  const _DietPlanDetailsDialog({required this.dietPlan});
+
+  @override
+  State<_DietPlanDetailsDialog> createState() => _DietPlanDetailsDialogState();
+}
+
+class _DietPlanDetailsDialogState extends State<_DietPlanDetailsDialog> {
+  String _selectedDay = 'monday';
+  final List<String> _days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+  final Map<String, String> _dayNames = {
+    'monday': 'Monday',
+    'tuesday': 'Tuesday',
+    'wednesday': 'Wednesday',
+    'thursday': 'Thursday',
+    'friday': 'Friday',
+    'saturday': 'Saturday',
+    'sunday': 'Sunday',
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    // Set today's day as default
+    final now = DateTime.now();
+    final weekday = now.weekday; // 1=Monday, 7=Sunday
+    _selectedDay = weekday == 7 ? 'sunday' : _days[weekday - 1];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mealsData = widget.dietPlan['meals_data'] as Map<String, dynamic>;
+    final is7DayPlan = mealsData.containsKey('monday');
+    final currentDayMeals = is7DayPlan ? mealsData[_selectedDay] as Map<String, dynamic>? : mealsData;
+
+    // Calculate the actual date for the selected day
+    String displayDate = widget.dietPlan['start_date'];
+    if (is7DayPlan) {
+      try {
+        final startDate = DateTime.parse(widget.dietPlan['start_date']);
+        final dayIndex = _days.indexOf(_selectedDay);
+        final selectedDate = startDate.add(Duration(days: dayIndex));
+        displayDate = '${selectedDate.day.toString().padLeft(2, '0')}/${selectedDate.month.toString().padLeft(2, '0')}/${selectedDate.year}';
+      } catch (e) {
+        displayDate = widget.dietPlan['start_date'];
+      }
+    }
+
+    return AlertDialog(
+      title: Text(widget.dietPlan['plan_name']),
+      content: SizedBox(
+        width: 600,
+        height: 600,
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Target: ${widget.dietPlan['target_calories']} cal/day',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  Text('Date: $displayDate'),
+                  Text('Trainer: ${widget.dietPlan['trainer_name']}'),
+                ],
+              ),
+            ),
+            if (is7DayPlan) ...[
+              const SizedBox(height: 16),
+              const Text(
+                'Select Day:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _days.map((day) {
+                  final isSelected = day == _selectedDay;
+                  return ChoiceChip(
+                    label: Text(_dayNames[day]!.substring(0, 3)),
+                    selected: isSelected,
+                    onSelected: (selected) {
+                      if (selected) {
+                        setState(() {
+                          _selectedDay = day;
+                        });
+                      }
+                    },
+                    selectedColor: Colors.green,
+                    labelStyle: TextStyle(
+                      color: isSelected ? Colors.white : Colors.black,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _dayNames[_selectedDay]! + '\'s Plan',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green,
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (currentDayMeals != null) ...[
+                      _buildMealSection('Breakfast', currentDayMeals['breakfast']),
+                      _buildMealSection('Lunch', currentDayMeals['lunch']),
+                      _buildMealSection('Dinner', currentDayMeals['dinner']),
+                      _buildMealSection('Snacks', currentDayMeals['snacks']),
+                    ],
+                    if (widget.dietPlan['notes'] != null && 
+                        widget.dietPlan['notes'].toString().isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Trainer Notes:',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(widget.dietPlan['notes']),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Close'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMealSection(String mealName, dynamic items) {
+    if (items == null) return const SizedBox.shrink();
+    
+    final itemList = items is List ? items : [];
+    if (itemList.isEmpty) return const SizedBox.shrink();
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              mealName,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: Color(0xFF4CAF50),
+              ),
+            ),
+            const SizedBox(height: 8),
+            ...itemList.map((item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.circle, size: 6, color: Colors.green),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '${item['food']} - ${item['quantity']}',
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                      ),
+                    ],
+                  ),
+                )),
+          ],
+        ),
       ),
     );
   }

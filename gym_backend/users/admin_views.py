@@ -330,6 +330,86 @@ def assign_trainer_to_goal(request):
 
 
 @csrf_exempt
+def create_trainer(request):
+    """Admin can create a new trainer account"""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            name = data.get('name')
+            emailid = data.get('emailid')
+            mobile = data.get('mobile')
+            gender = data.get('gender')
+            experience = data.get('experience')
+            specialization = data.get('specialization')
+            certification = data.get('certification', '')
+            
+            if not all([name, emailid, mobile, gender, experience, specialization]):
+                return JsonResponse({
+                    'success': False,
+                    'message': 'All required fields must be provided'
+                }, status=400)
+            
+            # Check if email already exists
+            if UserLogin.objects.filter(emailid=emailid).exists():
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Email already exists'
+                }, status=400)
+            
+            # Validate mobile number
+            if len(mobile) != 10 or not mobile.isdigit():
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Mobile number must be 10 digits'
+                }, status=400)
+            
+            # Generate password: trainername+tr
+            password = name.lower().replace(' ', '') + '+tr'
+            
+            # Create UserLogin account
+            user = UserLogin.objects.create(
+                name=name,
+                emailid=emailid,
+                password=password,
+                role='trainer'
+            )
+            
+            # Create Trainer profile
+            trainer = Trainer.objects.create(
+                user=user,
+                mobile=mobile,
+                gender=gender,
+                experience=experience,
+                specialization=specialization,
+                certification=certification,
+                is_active=True
+            )
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Trainer created successfully',
+                'trainer': {
+                    'id': trainer.id,
+                    'name': user.name,
+                    'email': user.emailid,
+                    'mobile': trainer.mobile,
+                    'password': password  # Return password so admin can share it
+                }
+            }, status=201)
+            
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': str(e)
+            }, status=500)
+    
+    return JsonResponse({
+        'success': False,
+        'message': 'Only POST method is allowed'
+    }, status=405)
+
+
+@csrf_exempt
 def remove_trainer_from_goal(request):
     """Remove a trainer from their assigned goal category"""
     if request.method == 'POST':

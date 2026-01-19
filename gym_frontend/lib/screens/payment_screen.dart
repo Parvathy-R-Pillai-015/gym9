@@ -25,6 +25,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
   bool _isProcessing = false;
   String _userName = 'User';
 
+  @override
+  void initState() {
+    super.initState();
+    _userName = widget.userName ?? 'User';
+  }
+
   final List<Map<String, dynamic>> _paymentMethods = [
     {
       'value': 'gpay',

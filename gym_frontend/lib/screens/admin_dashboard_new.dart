@@ -17,11 +17,12 @@ class _AdminDashboardNewState extends State<AdminDashboardNew> with SingleTicker
   List<Map<String, dynamic>> _allUsers = [];
   List<Map<String, dynamic>> _paidUsers = [];
   List<Map<String, dynamic>> _unpaidUsers = [];
+  List<Map<String, dynamic>> _allReviews = [];
   
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     _loadAllData();
   }
   
@@ -34,6 +35,7 @@ class _AdminDashboardNewState extends State<AdminDashboardNew> with SingleTicker
       _loadAllUsers(),
       _loadPaidUsers(),
       _loadUnpaidUsers(),
+      _loadAllReviews(),
     ]);
     
     setState(() {
@@ -98,6 +100,25 @@ class _AdminDashboardNewState extends State<AdminDashboardNew> with SingleTicker
     }
   }
   
+  Future<void> _loadAllReviews() async {
+    try {
+      final response = await http.get(
+        Uri.parse('http://127.0.0.1:8000/api/reviews/all/'),
+      );
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success']) {
+          setState(() {
+            _allReviews = List<Map<String, dynamic>>.from(data['reviews']);
+          });
+        }
+      }
+    } catch (e) {
+      print('Error loading reviews: $e');
+    }
+  }
+  
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -116,6 +137,7 @@ class _AdminDashboardNewState extends State<AdminDashboardNew> with SingleTicker
             Tab(text: 'Paid Users'),
             Tab(text: 'Unpaid Users'),
             Tab(text: 'Trainers'),
+            Tab(text: 'Reviews'),
           ],
         ),
         actions: [
@@ -140,6 +162,7 @@ class _AdminDashboardNewState extends State<AdminDashboardNew> with SingleTicker
                 _buildPaidUsersTab(),
                 _buildUnpaidUsersTab(),
                 const TrainerManagementTab(),
+                _buildReviewsTab(),
               ],
             ),
     );
@@ -381,6 +404,122 @@ class _AdminDashboardNewState extends State<AdminDashboardNew> with SingleTicker
           ],
         ],
       ),
+    );
+  }
+  
+  Widget _buildReviewsTab() {
+    if (_allReviews.isEmpty) {
+      return const Center(child: Text('No reviews yet'));
+    }
+    
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _allReviews.length,
+      itemBuilder: (context, index) {
+        final review = _allReviews[index];
+        return Card(
+          margin: const EdgeInsets.only(bottom: 16),
+          elevation: 3,
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.person, size: 16, color: Colors.blue),
+                              const SizedBox(width: 4),
+                              Text(
+                                review['user_name'],
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            review['user_email'],
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Row(
+                      children: List.generate(5, (i) {
+                        return Icon(
+                          i < review['rating'] ? Icons.star : Icons.star_border,
+                          color: Colors.amber,
+                          size: 20,
+                        );
+                      }),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.purple.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.fitness_center, size: 16, color: Color(0xFF7B4EFF)),
+                      const SizedBox(width: 4),
+                      const Text(
+                        'Trainer: ',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Text(
+                        review['trainer_name'],
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF7B4EFF),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  review['review_text'],
+                  style: const TextStyle(
+                    fontSize: 14,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    review['created_at'],
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
   

@@ -73,6 +73,17 @@ class _LoginScreenState extends State<LoginScreen> {
           
           if (userRole == 'admin') {
             Navigator.pushReplacementNamed(context, '/admin-dashboard');
+          } else if (userRole == 'trainer') {
+            // Redirect to trainer dashboard
+            final trainerId = data['user']['trainer_id'];
+            Navigator.pushReplacementNamed(
+              context,
+              '/trainer-dashboard',
+              arguments: {
+                'trainerId': trainerId,
+                'trainerName': userName,
+              },
+            );
           } else {
             // Check if user has a profile
             await _checkUserProfile(userId, userName);
