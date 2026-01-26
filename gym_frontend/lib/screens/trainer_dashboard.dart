@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'video_upload_screen.dart';
 import 'manage_videos_screen.dart';
 import 'trainer_chat_list_screen.dart';
+import 'trainer_food_monitoring_screen.dart';
 
 class TrainerDashboard extends StatefulWidget {
   final int trainerId;
@@ -686,6 +687,69 @@ class _TrainerDashboardState extends State<TrainerDashboard> {
                     ),
                     const SizedBox(height: 20),
                   ],
+
+                  // Food Monitoring Section
+                  Card(
+                    elevation: 3,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF4CAF50), Color(0xFF66BB6A)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.restaurant_menu, color: Colors.white, size: 28),
+                              const SizedBox(width: 10),
+                              const Text(
+                                'Food Monitoring',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'Monitor your users\' daily food intake and calories',
+                            style: TextStyle(color: Colors.white, fontSize: 14),
+                          ),
+                          const SizedBox(height: 15),
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => TrainerFoodMonitoringScreen(
+                                    trainerId: widget.trainerId,
+                                    trainerName: widget.trainerName,
+                                  ),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.visibility),
+                            label: const Text('View Food Calories'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: const Color(0xFF4CAF50),
+                              minimumSize: const Size(double.infinity, 45),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
 
                   // Video Management Section
                   Card(

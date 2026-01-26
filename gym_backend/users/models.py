@@ -472,3 +472,85 @@ class ChatMessage(models.Model):
     
     def __str__(self):
         return f"{self.sender_type}: {self.message[:50]}"
+
+
+class FoodEntry(models.Model):
+    """
+    FoodEntry model to track user's daily food consumption with quantities
+    """
+    MEAL_TYPE_CHOICES = [
+        ('breakfast', 'Breakfast'),
+        ('lunch', 'Lunch'),
+        ('dinner', 'Dinner'),
+        ('snacks', 'Snacks'),
+        ('fruits', 'Fruits'),
+        ('nuts', 'Nuts'),
+        ('milks', 'Milks'),
+        ('other', 'Other'),
+    ]
+    
+    user = models.ForeignKey(UserLogin, on_delete=models.CASCADE, related_name='food_entries', verbose_name="User")
+    food_item = models.ForeignKey(FoodItem, on_delete=models.PROTECT, related_name='entries', verbose_name="Food Item")
+    quantity = models.FloatField(verbose_name="Quantity")
+    quantity_unit = models.CharField(max_length=50, default="g", verbose_name="Unit (g, ml, piece, cup, bowl, etc.)")
+    meal_type = models.CharField(max_length=20, choices=MEAL_TYPE_CHOICES, verbose_name="Meal Type")
+    calculated_calories = models.FloatField(verbose_name="Calculated Calories")
+    is_custom_calories = models.BooleanField(default=False, verbose_name="Is Custom Default Calorie")
+    entry_date = models.DateField(verbose_name="Entry Date")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Created At")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Updated At")
+    
+    class Meta:
+        db_table = 'food_entry'
+        verbose_name = 'Food Entry'
+        verbose_name_plural = 'Food Entries'
+        ordering = ['-entry_date', 'meal_type']
+        indexes = [
+            models.Index(fields=['user', 'entry_date']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.name} - {self.food_item.name} ({self.quantity}{self.quantity_unit}) - {self.entry_date}"
+    
+    def save(self, *args, **kwargs):
+        """Calculate calories based on quantity"""
+        unit = (self.quantity_unit or '').lower()
+        if self.is_custom_calories:
+            # For custom foods, treat FoodItem.calories as per 100g (or per piece for discrete units)
+            if unit in ['piece', 'cup', 'bowl']:
+                self.calculated_calories = self.food_item.calories * self.quantity
+            else:
+                self.calculated_calories = (self.food_item.calories / 100) * self.quantity
+        else:
+            # Calculate based on quantity and unit
+            if unit in ['piece', 'cup', 'bowl']:
+                # For discrete items: multiply base calories by quantity
+                # Example: 2 idli = 70 cal * 2 = 140 cal
+                self.calculated_calories = self.food_item.calories * self.quantity
+            else:
+                # For grams/ml: calculate proportionally from 100g base
+                # Example: 200g rice = (130 cal / 100) * 200 = 260 cal
+                self.calculated_calories = (self.food_item.calories / 100) * self.quantity
+        
+        super().save(*args, **kwargs)
+    
+    @classmethod
+    def get_daily_total(cls, user, entry_date):
+        """Get total calories for a specific date"""
+        entries = cls.objects.filter(user=user, entry_date=entry_date)
+        total = sum([entry.calculated_calories for entry in entries])
+        return total
+    
+    @classmethod
+    def get_daily_breakdown(cls, user, entry_date):
+        """Get calorie breakdown by meal type for a specific date"""
+        entries = cls.objects.filter(user=user, entry_date=entry_date)
+        breakdown = {}
+        for meal_type in dict(cls.MEAL_TYPE_CHOICES).keys():
+            meal_entries = entries.filter(meal_type=meal_type)
+            meal_total = sum([entry.calculated_calories for entry in meal_entries])
+            breakdown[meal_type] = {
+                'total_calories': meal_total,
+                'entries': meal_entries.count()
+            }
+        return breakdown

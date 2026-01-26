@@ -18,7 +18,7 @@ from django.contrib import admin
 from django.urls import path
 from django.conf import settings
 from django.conf.urls.static import static
-from users import views, admin_views
+from users import views, admin_views, food_views, trainer_food_views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -64,6 +64,19 @@ urlpatterns = [
     path('api/chat/messages/<int:user_id>/<int:trainer_id>/', views.get_chat_messages, name='get_chat_messages'),
     path('api/chat/trainer/<int:trainer_id>/', views.get_trainer_chats, name='get_trainer_chats'),
     path('api/chat/admin/all/', views.get_all_chats_admin, name='get_all_chats_admin'),
+    
+    # Food Calorie Tracker APIs
+    path('api/food/search/', food_views.search_foods, name='search_foods'),
+    path('api/food/categories/', food_views.get_food_categories, name='get_food_categories'),
+    path('api/food/entry/add/', food_views.add_food_entry, name='add_food_entry'),
+    path('api/food/entries/daily/', food_views.get_daily_food_entries, name='get_daily_food_entries'),
+    path('api/food/entries/history/', food_views.get_food_history, name='get_food_history'),
+    path('api/food/entry/delete/', food_views.delete_food_entry, name='delete_food_entry'),
+    
+    # Trainer Food Calorie Tracker APIs
+    path('api/trainer/food/users/calories/', trainer_food_views.trainer_get_assigned_users_calories, name='trainer_get_assigned_users_calories'),
+    path('api/trainer/food/user/daily/', trainer_food_views.trainer_get_user_daily_calories, name='trainer_get_user_daily_calories'),
+    path('api/trainer/food/user/history/', trainer_food_views.trainer_get_user_calorie_history, name='trainer_get_user_calorie_history'),
     
     # Admin APIs
     path('api/admin/users/all/', admin_views.get_all_users, name='get_all_users'),

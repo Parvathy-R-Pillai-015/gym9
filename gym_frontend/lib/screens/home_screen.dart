@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'workout_videos_screen.dart';
 import 'chat_screen.dart';
+import 'food_calorie_calculator_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final int userId;
@@ -576,10 +577,21 @@ class _HomeScreenState extends State<HomeScreen> {
                               }
                             },
                           ),
-                          _buildWorkoutCard(
-                            'Yoga',
-                            Icons.self_improvement,
+                          _buildActionCard(
+                            'Food Calorie Calculator',
+                            Icons.fastfood,
                             const Color(0xFF4ECDC4),
+                            () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => FoodCalorieCalculatorScreen(
+                                    userId: widget.userId,
+                                    userName: widget.userName,
+                                  ),
+                                ),
+                              );
+                            },
                           ),
                           _buildWorkoutCard(
                             'Stretching',

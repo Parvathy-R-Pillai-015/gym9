@@ -3,10 +3,11 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
+from django.utils import timezone
 import json
 from datetime import datetime, timedelta, date
 from dateutil.relativedelta import relativedelta
-from .models import UserLogin, Trainer, UserProfile, Attendance, Review, FoodItem, DietPlanTemplate, UserDietPlan, WorkoutVideo, VideoRecommendation, ChatMessage
+from .models import UserLogin, Trainer, UserProfile, Attendance, Review, FoodItem, DietPlanTemplate, UserDietPlan, WorkoutVideo, VideoRecommendation, ChatMessage, FoodEntry
 
 # Create your views here.
 
@@ -1807,7 +1808,7 @@ def send_chat_message(request):
                     'id': chat_message.id,
                     'message': chat_message.message,
                     'sender_type': chat_message.sender_type,
-                    'created_at': chat_message.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                    'created_at': chat_message.created_at.isoformat(),
                     'is_read': chat_message.is_read
                 }
             }, status=201)
@@ -1857,7 +1858,7 @@ def get_chat_messages(request, user_id, trainer_id):
                     'sender_type': msg.sender_type,
                     'sender_name': user_profile.user.name if msg.sender_type == 'user' else trainer.user.name,
                     'is_read': msg.is_read,
-                    'created_at': msg.created_at.strftime('%Y-%m-%d %H:%M:%S')
+                    'created_at': msg.created_at.isoformat()
                 })
             
             # Mark all trainer messages as read by user (or vice versa)
@@ -1920,12 +1921,15 @@ def get_trainer_chats(request, trainer_id):
                     is_read=False
                 ).count()
                 
+                # Convert UTC to local timezone for display
+                last_message_time = timezone.localtime(last_message.created_at).strftime('%Y-%m-%d %H:%M:%S') if last_message else ''
+                
                 chats_list.append({
                     'user_id': user_profile.user.id,
                     'user_name': user_profile.user.name,
                     'user_email': user_profile.user.emailid,
                     'last_message': last_message.message if last_message else '',
-                    'last_message_time': last_message.created_at.strftime('%Y-%m-%d %H:%M:%S') if last_message else '',
+                    'last_message_time': last_message_time,
                     'unread_count': unread_count
                 })
             
@@ -1959,25 +1963,43 @@ def get_all_chats_admin(request):
     """
     if request.method == 'GET':
         try:
-            # Get all distinct user-trainer pairs
-            chats = ChatMessage.objects.values('user_id', 'trainer_id').distinct()
+            # Get all distinct user-trainer pairs with proper distinct on both fields
+            from django.db.models import Max
+            
+            # Get unique user-trainer pairs by grouping
+            unique_pairs = ChatMessage.objects.values('user_id', 'trainer_id').annotate(
+                last_message_time=Max('created_at')
+            ).order_by('-last_message_time')
             
             chats_list = []
-            for chat in chats:
-                user_profile = UserProfile.objects.get(id=chat['user_id'])
-                trainer = Trainer.objects.get(id=chat['trainer_id'])
+            seen_pairs = set()
+            
+            for pair in unique_pairs:
+                pair_key = (pair['user_id'], pair['trainer_id'])
+                
+                # Skip if we've already seen this pair
+                if pair_key in seen_pairs:
+                    continue
+                    
+                seen_pairs.add(pair_key)
+                
+                user_profile = UserProfile.objects.get(id=pair['user_id'])
+                trainer = Trainer.objects.get(id=pair['trainer_id'])
                 
                 # Get last message
                 last_message = ChatMessage.objects.filter(
-                    user_id=chat['user_id'],
-                    trainer_id=chat['trainer_id']
+                    user_id=pair['user_id'],
+                    trainer_id=pair['trainer_id']
                 ).order_by('-created_at').first()
                 
                 # Get total message count
                 message_count = ChatMessage.objects.filter(
-                    user_id=chat['user_id'],
-                    trainer_id=chat['trainer_id']
+                    user_id=pair['user_id'],
+                    trainer_id=pair['trainer_id']
                 ).count()
+                
+                # Convert UTC to local timezone for display
+                last_message_time = timezone.localtime(last_message.created_at).strftime('%Y-%m-%d %H:%M:%S') if last_message else ''
                 
                 chats_list.append({
                     'user_id': user_profile.user.id,
@@ -1988,7 +2010,7 @@ def get_all_chats_admin(request):
                     'trainer_specialization': trainer.specialization,
                     'last_message': last_message.message if last_message else '',
                     'last_message_sender': last_message.sender_type if last_message else '',
-                    'last_message_time': last_message.created_at.strftime('%Y-%m-%d %H:%M:%S') if last_message else '',
+                    'last_message_time': last_message_time,
                     'total_messages': message_count
                 })
             

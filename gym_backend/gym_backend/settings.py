@@ -78,7 +78,8 @@ WSGI_APPLICATION = 'gym_backend.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.mysql',
+        'ENGINE': 'django.db.backends.m'
+        'ysql',
         'NAME': 'db_gym',
         'USER': 'root',
         'PASSWORD': 'root123',

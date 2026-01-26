@@ -197,13 +197,16 @@ class _ChatScreenState extends State<ChatScreen> {
 
   String _formatTime(String timestamp) {
     try {
-      final dateTime = DateTime.parse(timestamp);
+      // Parse UTC timestamp and convert to local time
+      final dateTime = DateTime.parse(timestamp).toLocal();
       final now = DateTime.now();
-      final difference = now.difference(dateTime);
+      final today = DateTime(now.year, now.month, now.day);
+      final messageDate = DateTime(dateTime.year, dateTime.month, dateTime.day);
+      final difference = today.difference(messageDate).inDays;
 
-      if (difference.inDays == 0) {
+      if (difference == 0) {
         return '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
-      } else if (difference.inDays == 1) {
+      } else if (difference == 1) {
         return 'Yesterday';
       } else {
         return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
