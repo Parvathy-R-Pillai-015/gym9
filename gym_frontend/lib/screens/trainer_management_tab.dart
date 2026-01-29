@@ -523,13 +523,13 @@ class _TrainerManagementTabState extends State<TrainerManagementTab> {
             child: ExpansionTile(
               leading: Icon(
                 Icons.fitness_center,
-                color: trainers.length >= 2 ? Colors.green : Colors.orange,
+                color: trainers.length >= 5 ? Colors.green : Colors.orange,
               ),
               title: Text(
                 goalCat['label']!,
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
-              subtitle: Text('${trainers.length}/2 Trainers Assigned'),
+              subtitle: Text('${trainers.length}/5 Trainers Assigned'),
               children: [
                 if (trainers.isEmpty)
                   const Padding(

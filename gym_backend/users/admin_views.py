@@ -313,10 +313,10 @@ def assign_trainer_to_goal(request):
                 is_active=True
             ).count()
             
-            if current_trainers_count >= 2:
+            if current_trainers_count >= 5:
                 return JsonResponse({
                     'success': False,
-                    'message': f'This category already has 2 trainers assigned. Please remove one first.'
+                    'message': f'This category already has 5 trainers assigned. Please remove one first.'
                 }, status=400)
             
             trainer = Trainer.objects.get(id=trainer_id)
