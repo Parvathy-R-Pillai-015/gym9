@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'registration_otp_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -29,6 +30,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _showError('Please enter your email');
       return;
     }
+    if (!_emailController.text.contains('@')) {
+      _showError('Please enter a valid email address');
+      return;
+    }
     if (_passwordController.text.isEmpty) {
       _showError('Please enter a password');
       return;
@@ -43,12 +48,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse('http://127.0.0.1:8000/api/users/create/'),
+        Uri.parse('http://127.0.0.1:8000/api/auth/send-otp/'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
-          'name': _nameController.text.trim(),
-          'emailid': _emailController.text.trim(),
-          'password': _passwordController.text,
+          'email': _emailController.text.trim().toLowerCase(),
         }),
       );
 
@@ -58,21 +61,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
         });
       }
 
-      if (response.statusCode == 201) {
-        final data = json.decode(response.body);
+      if (response.statusCode == 200) {
         if (mounted) {
-          _showSuccess('Registration successful! Logging you in...');
-          
-          // Automatically log the user in after registration
-          await _autoLogin(
-            _emailController.text.trim(),
-            _passwordController.text,
-            data['user'],
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => OtpVerificationScreenWithRegistration(
+                email: _emailController.text.trim().toLowerCase(),
+                name: _nameController.text.trim(),
+                password: _passwordController.text,
+              ),
+            ),
           );
         }
       } else {
         final data = json.decode(response.body);
-        _showError(data['message'] ?? 'Registration failed');
+        _showError(data['message'] ?? 'Failed to send OTP');
       }
     } catch (e) {
       if (mounted) {
